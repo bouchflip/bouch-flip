@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Bouch Flip: 11 Ranks</title>
+    <title>Bouch Flip: Chaos Army</title>
     <style>
         :root { --bg: #f0f9ff; --text: #2c3e50; --acc: #3498db; }
         [data-theme="dark"] { --bg: #1a1a1a; --text: #ecf0f1; --acc: #e74c3c; }
@@ -12,8 +12,13 @@
 
         #stats-container { position: absolute; top: 40px; left: 20px; z-index: 10; pointer-events: none; }
         #flipCount { font-size: 40px; color: var(--text); line-height: 1; }
-        #frenzy-container { width: 150px; height: 12px; background: rgba(0,0,0,0.1); border-radius: 6px; margin-top: 10px; overflow: hidden; }
-        #frenzy-bar { width: 0%; height: 100%; background: var(--acc); transition: width 0.2; }
+        
+        /* 3-STAGE FRENZY BAR */
+        #frenzy-container { width: 180px; height: 16px; background: rgba(0,0,0,0.1); border-radius: 8px; margin-top: 10px; overflow: hidden; border: 2px solid rgba(0,0,0,0.1); position: relative; }
+        #frenzy-bar { width: 0%; height: 100%; background: #3498db; transition: width 0.2s, background 0.3s; }
+        .stage-2 #frenzy-bar { background: #f39c12; }
+        .stage-3 #frenzy-bar { background: #e74c3c; animation: flash 0.3s infinite; }
+        @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
         #controls-container { position: absolute; top: 40px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
         .btn-ui { padding: 10px 15px; border-radius: 20px; border: none; cursor: pointer; font-weight: bold; font-size: 10px; background: var(--text); color: var(--bg); }
@@ -55,6 +60,7 @@
         <div id="flipCount">0</div>
         <span id="prestigeRank" style="font-size:14px; color:#f1c40f;">Rank: Rookie</span>
         <div id="frenzy-container"><div id="frenzy-bar"></div></div>
+        <div id="frenzy-status" style="font-size:10px; color:var(--acc); margin-top:5px; font-weight:bold;">READY</div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
@@ -65,33 +71,19 @@
 
         const DEFAULT_STATE = { flips: 0, prestige: 0, unlockedSkins: [0], currentSkin: 0, theme: 'light' };
         let gameState = JSON.parse(localStorage.getItem('bouchSave')) || DEFAULT_STATE;
-
         const baseTitles = ["Rookie", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Ruby", "Diamond", "Master", "Grandmaster", "Bouch God"];
-        
         const configs = [
-            { c: "141, 214, 65,", s: 5, f: 0.02 }, // 0 Rookie
-            { c: "169, 113, 66,", s: 4, f: 0.04 }, // 1 Bronze
-            { c: "220, 220, 220,", s: 3, f: 0.05 }, // 2 Silver
-            { c: "255, 215, 0,", s: 6, f: 0.02 },  // 3 Gold
-            { c: "173, 216, 230,", s: 5, f: 0.02 }, // 4 Platinum
-            { c: "0, 255, 127,", s: 8, f: 0.03 },  // 5 Emerald
-            { c: "255, 0, 0,", s: 8, f: 0.03 },    // 6 Ruby
-            { c: "0, 255, 255,", s: 5, f: 0.02, shape: 'star' }, // 7 Diamond
-            { c: "147, 112, 219,", s: 10, f: 0.015 }, // 8 Master
-            { c: "255, 140, 0,", s: 12, f: 0.012 },  // 9 Grandmaster
-            { c: "0, 0, 0,", s: 15, f: 0.01, glow: "#ff0000" } // 10 God
+            { c: "141, 214, 65,", s: 5, f: 0.02 }, { c: "169, 113, 66,", s: 4, f: 0.04 }, { c: "220, 220, 220,", s: 3, f: 0.05 }, { c: "255, 215, 0,", s: 6, f: 0.02 },
+            { c: "173, 216, 230,", s: 5, f: 0.02 }, { c: "0, 255, 127,", s: 8, f: 0.03 }, { c: "255, 0, 0,", s: 8, f: 0.03 }, { c: "0, 255, 255,", s: 5, f: 0.02, shape: 'star' },
+            { c: "147, 112, 219,", s: 10, f: 0.015 }, { c: "255, 140, 0,", s: 12, f: 0.012 }, { c: "0, 0, 0,", s: 15, f: 0.01, glow: "#ff0000" }
         ];
 
-        function getRankTitle(f, p) {
-            if (p < 10) return baseTitles[p];
-            if (f >= 1000000) return "ETERNAL BOUCH";
-            return "Bouch God";
-        }
-
         const bouch = Bodies.rectangle(window.innerWidth/2, window.innerHeight/2, 100, 140, { chamfer: { radius: 20 }, frictionAir: 0.006, restitution: 0.5, render: { sprite: { texture: 'Bouch.png', xScale: 0.45, yScale: 0.45 } } });
-        const wallThick = 1000;
+        let army = [];
+
         function createWalls() {
             const w = window.innerWidth, h = window.innerHeight;
+            const wallThick = 1000;
             return [ Bodies.rectangle(w/2, h + wallThick/2, w, wallThick, { isStatic: true, render: { visible: false } }), Bodies.rectangle(w/2, -wallThick/2, w, wallThick, { isStatic: true, render: { visible: false } }), Bodies.rectangle(-wallThick/2, h/2, wallThick, h, { isStatic: true, render: { visible: false } }), Bodies.rectangle(w + wallThick/2, h/2, wallThick, h, { isStatic: true, render: { visible: false } }) ];
         }
         Composite.add(engine.world, [bouch, ...createWalls()]);
@@ -101,54 +93,104 @@
 
         function updateUI() {
             document.getElementById('flipCount').innerText = gameState.flips.toLocaleString();
-            document.getElementById('prestigeRank').innerText = "Rank: " + getRankTitle(gameState.flips, gameState.prestige);
+            let p = gameState.prestige;
+            document.getElementById('prestigeRank').innerText = "Rank: " + (p < 11 ? baseTitles[p] : "Eternal");
             document.getElementById('prestige-btn').style.display = (gameState.prestige < 10 && gameState.flips >= 100) ? 'block' : 'none';
         }
 
-        document.getElementById('prestige-btn').onclick = () => {
-            gameState.prestige++; gameState.flips = 0;
-            if(!gameState.unlockedSkins.includes(gameState.prestige)) gameState.unlockedSkins.push(gameState.prestige);
-            save(); updateUI(); renderInventory();
-        };
-
-        document.getElementById('code-btn').onclick = () => {
-            const code = prompt("Enter Code:").toLowerCase();
-            if (code === "unlockall") { gameState.unlockedSkins = [0,1,2,3,4,5,6,7,8,9,10]; gameState.prestige = 10; save(); window.location.reload(); }
-            if (code === "freshstart") { gameState = JSON.parse(JSON.stringify(DEFAULT_STATE)); save(); window.location.reload(); }
-            if (code === "beatgame") { document.getElementById('evil-overlay').style.display='flex'; setTimeout(() => { gameState = JSON.parse(JSON.stringify(DEFAULT_STATE)); save(); window.location.reload(); }, 4000); }
-        };
-
-        let fpts = 0, hyper = false, lTap = 0, combo = 0, pts = [];
+        // FRENZY LOGIC
+        let fpts = 0, fLevel = 1, activeFrenzy = false, lTap = 0, combo = 0, pts = [];
+        
         render.canvas.addEventListener('touchstart', (e) => {
+            if (activeFrenzy) return;
             const now = Date.now();
-            if (now - lTap < 300) { combo++; if (combo >= 3) { triggerCrazy(); combo = 0; } } else combo = 1;
+            if (now - lTap < 400) { 
+                fpts++; 
+                updateFrenzyBar();
+                if (fpts >= 30) triggerFrenzy(3);
+                else if (fpts === 20) triggerFrenzy(2);
+                else if (fpts === 10) triggerFrenzy(1);
+            } else fpts = 0;
             lTap = now;
+            updateFrenzyBar();
         });
 
-        function triggerCrazy() {
-            if (hyper) return; fpts += 10;
-            document.getElementById('frenzy-bar').style.width = fpts + '%';
-            Body.applyForce(bouch, bouch.position, { x: (Math.random()-0.5)*0.1, y: -0.15 });
-            if (fpts >= 100) {
-                hyper = true; bouch.render.sprite.tint = "#f1c40f";
-                setTimeout(() => { hyper = false; fpts = 0; document.getElementById('frenzy-bar').style.width = '0%'; bouch.render.sprite.tint = null; }, 3000);
+        function updateFrenzyBar() {
+            let bar = document.getElementById('frenzy-bar');
+            let status = document.getElementById('frenzy-status');
+            bar.style.width = (fpts / 30 * 100) + "%";
+            
+            document.getElementById('frenzy-container').className = fpts >= 30 ? "stage-3" : (fpts >= 20 ? "stage-2" : "");
+            
+            if (fpts >= 30) status.innerText = "ULTIMATE BOUCH ARMY!!";
+            else if (fpts >= 20) status.innerText = "CRAZY FRENZY!";
+            else if (fpts >= 10) status.innerText = "STANDARD FRENZY";
+            else status.innerText = "TAP FAST!";
+        }
+
+        function triggerFrenzy(lvl) {
+            activeFrenzy = true;
+            if (window.navigator.vibrate) window.navigator.vibrate(lvl * 100);
+            
+            if (lvl === 3) spawnArmy();
+
+            let duration = 3000;
+            let spinPower = lvl === 1 ? 0.3 : (lvl === 2 ? 0.5 : 0.8);
+
+            let frenzyInterval = setInterval(() => {
+                Body.setAngularVelocity(bouch, spinPower);
+                army.forEach(b => Body.setAngularVelocity(b, spinPower * 1.5));
+            }, 16);
+
+            setTimeout(() => {
+                clearInterval(frenzyInterval);
+                activeFrenzy = false;
+                fpts = 0;
+                updateFrenzyBar();
+                clearArmy();
+            }, duration);
+        }
+
+        function spawnArmy() {
+            for(let i=0; i<10; i++) {
+                let b = Bodies.rectangle(Math.random()*window.innerWidth, Math.random()*window.innerHeight, 80, 110, {
+                    frictionAir: 0, restitution: 1, collisionFilter: { group: -1 },
+                    render: { sprite: { texture: 'Bouch.png', xScale: 0.3, yScale: 0.3 }, opacity: 0.6 }
+                });
+                Body.setVelocity(b, { x: (Math.random()-0.5)*20, y: (Math.random()-0.5)*20 });
+                army.push(b);
+                Composite.add(engine.world, b);
             }
         }
 
-        function save() { localStorage.setItem('bouchSave', JSON.stringify(gameState)); }
+        function clearArmy() {
+            army.forEach(b => Composite.remove(engine.world, b));
+            army = [];
+        }
 
+        // CORE LOOP
         let rot = 0, lAng = bouch.angle;
         Events.on(engine, 'afterUpdate', () => {
-            if (hyper) { Body.setAngularVelocity(bouch, 0.6); Body.setVelocity(bouch, { x: 0, y: -0.5 }); }
+            // Main Bouch Rotation
             let delta = bouch.angle - lAng; rot += Math.abs(delta);
             if (rot >= Math.PI * 2) { gameState.flips++; rot = 0; updateUI(); save(); }
             lAng = bouch.angle;
+
+            // Army Rotation
+            army.forEach(b => {
+                // Ghost bouches count for flips too!
+                if (Math.abs(b.angularVelocity) > 0.1) {
+                    gameState.flips += 0.1; // Army adds flips rapidly
+                }
+            });
+
             if (bouch.speed > 3) {
                 pts.push({ x: bouch.position.x, y: bouch.position.y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 1, config: configs[gameState.currentSkin] });
             }
             if (bouch.position.y > window.innerHeight + 100 || bouch.position.y < -100) Body.setPosition(bouch, { x: window.innerWidth/2, y: window.innerHeight/2 });
         });
 
+        // Particle Rendering
         Events.on(render, 'afterRender', () => {
             const ctx = render.context;
             for (let i = pts.length - 1; i >= 0; i--) {
@@ -157,12 +199,24 @@
                 ctx.fillStyle = "rgba(" + p.config.c + p.life + ")";
                 if (p.config.glow) { ctx.shadowBlur = 15; ctx.shadowColor = p.config.glow; }
                 ctx.beginPath();
-                if (p.config.shape === 'star') { ctx.rect(p.x, p.y, p.config.s*p.life, p.config.s*p.life); }
-                else { ctx.arc(p.x, p.y, p.config.s * p.life, 0, Math.PI * 2); }
+                ctx.arc(p.x, p.y, p.config.s * p.life, 0, Math.PI * 2);
                 ctx.fill(); ctx.shadowBlur = 0;
             }
         });
 
+        // UI Handlers
+        document.getElementById('prestige-btn').onclick = () => {
+            gameState.prestige++; gameState.flips = 0;
+            if(!gameState.unlockedSkins.includes(gameState.prestige)) gameState.unlockedSkins.push(gameState.prestige);
+            save(); updateUI(); renderInventory();
+        };
+        document.getElementById('code-btn').onclick = () => {
+            const code = prompt("Enter Code:").toLowerCase();
+            if (code === "unlockall") { gameState.unlockedSkins = [0,1,2,3,4,5,6,7,8,9,10]; gameState.prestige = 10; save(); window.location.reload(); }
+            if (code === "freshstart") { gameState = JSON.parse(JSON.stringify(DEFAULT_STATE)); save(); window.location.reload(); }
+            if (code === "beatgame") { document.getElementById('evil-overlay').style.display='flex'; setTimeout(() => { gameState = JSON.parse(JSON.stringify(DEFAULT_STATE)); save(); window.location.reload(); }, 4000); }
+        };
+        function save() { localStorage.setItem('bouchSave', JSON.stringify(gameState)); }
         document.getElementById('inv-toggle').onclick = () => document.getElementById('inventory').classList.toggle('open');
         document.getElementById('theme-toggle').onclick = () => { gameState.theme = (gameState.theme === 'light' ? 'dark' : 'light'); document.body.setAttribute('data-theme', gameState.theme); save(); };
         document.getElementById('reset-btn').onclick = () => Body.setPosition(bouch, { x: window.innerWidth/2, y: window.innerHeight/2 });
