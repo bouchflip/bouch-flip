@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Bouch Flip Frenzy</title>
+    <title>Bouch Flip Hyper</title>
     <style>
         :root { --bg: #f0f9ff; --text: #2c3e50; --acc: #3498db; }
         [data-theme="dark"] { --bg: #1a1a1a; --text: #ecf0f1; --acc: #e74c3c; }
@@ -15,35 +15,37 @@
             touch-action: none; -webkit-user-select: none;
         }
 
-        /* Stats & Controls */
+        /* Stats Area */
         #stats-container { position: absolute; top: 40px; left: 20px; z-index: 10; pointer-events: none; }
+        #flipCount { font-size: 40px; color: var(--text); line-height: 1; }
+        
+        /* FRENZY BAR */
+        #frenzy-container { width: 150px; height: 12px; background: rgba(0,0,0,0.1); border-radius: 6px; margin-top: 10px; overflow: hidden; border: 1px solid rgba(0,0,0,0.1); }
+        #frenzy-bar { width: 0%; height: 100%; background: var(--acc); transition: width 0.2s; }
+        .hyper-active #frenzy-bar { background: #f1c40f; animation: pulse 0.5s infinite; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* Controls */
         #controls-container { position: absolute; top: 40px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
         .btn-ui { padding: 10px 15px; border-radius: 20px; border: none; cursor: pointer; font-weight: bold; font-size: 10px; background: var(--text); color: var(--bg); }
         
-        /* Crazy Flip Text Animation */
+        /* Pop Text */
         .crazy-text {
-            position: absolute; color: #f1c40f; font-size: 32px; font-weight: 900;
-            text-shadow: 2px 2px 0 #000, -2px -2px 0 #000;
-            pointer-events: none; z-index: 200;
-            animation: popOut 0.6s forwards ease-out;
+            position: absolute; color: #f1c40f; font-weight: 900; text-shadow: 2px 2px 0 #000;
+            pointer-events: none; z-index: 200; animation: popOut 0.5s forwards;
         }
-        @keyframes popOut {
-            0% { transform: scale(0.5) rotate(-10deg); opacity: 0; }
-            50% { transform: scale(1.2) rotate(10deg); opacity: 1; }
-            100% { transform: scale(1) translateY(-50px); opacity: 0; }
-        }
+        @keyframes popOut { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1.1) translateY(-100px); opacity: 0; } }
 
         /* Bottom Inventory */
         #inventory {
             position: absolute; bottom: -350px; left: 0; width: 100%; height: 320px;
-            background: rgba(0,0,0,0.95); color: white; transition: 0.4s;
-            z-index: 110; padding: 20px; box-sizing: border-box;
+            background: rgba(0,0,0,0.95); color: white; transition: 0.4s; z-index: 110; padding: 20px; box-sizing: border-box;
             border-top: 4px solid var(--acc); border-radius: 30px 30px 0 0;
         }
         #inventory.open { bottom: 0; }
         .skin-list { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
         .skin-card { min-width: 100px; padding: 15px; border: 2px solid #333; border-radius: 15px; background: #111; flex-shrink: 0; }
-        .skin-card.active { border-color: #f1c40f; background: rgba(241, 196, 15, 0.2); }
     </style>
 </head>
 <body>
@@ -55,14 +57,17 @@
     </div>
 
     <div id="inventory">
-        <h3 style="margin:0; font-size:16px; color:var(--acc)">Prestige Skins</h3>
+        <h3 style="margin:0; font-size:16px;">Prestige Skins</h3>
         <div id="skin-list" class="skin-list"></div>
     </div>
 
     <div id="stats-container">
-        <p style="font-size:10px; color:var(--acc); margin:0;">FLIPS</p>
-        <div id="flipCount" style="font-size:40px; color:var(--text);">0</div>
+        <div id="flipCount">0</div>
         <span id="prestigeRank" style="font-size:14px; color:#f1c40f;">Rank: Rookie</span>
+        <div id="frenzy-container">
+            <div id="frenzy-bar"></div>
+        </div>
+        <div id="frenzy-label" style="font-size:9px; color:var(--acc); margin-top:4px;">FRENZY METER</div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
@@ -78,13 +83,11 @@
         let gameState = JSON.parse(localStorage.getItem('bouchSave')) || { flips: 0, prestige: 0, unlockedSkins: [0], currentSkin: 0, theme: 'light' };
         const prestigeTitles = ["Rookie", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Ruby", "Diamond", "Master", "Grandmaster", "Bouch God"];
 
-        // BOUCH
         const bouch = Bodies.rectangle(window.innerWidth/2, window.innerHeight/2, 100, 140, {
             chamfer: { radius: 20 }, frictionAir: 0.006, restitution: 0.5,
             render: { sprite: { texture: 'Bouch.png', xScale: 0.45, yScale: 0.45 } }
         });
 
-        // WALLS
         const wallThick = 1000;
         function createWalls() {
             const w = window.innerWidth, h = window.innerHeight;
@@ -101,65 +104,98 @@
         const mouseConstraint = MouseConstraint.create(engine, { mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } } });
         Composite.add(engine.world, mouseConstraint);
 
-        // CRAZY FLIP MECHANIC
+        // HYPER MODE STATE
+        let frenzyPoints = 0;
+        let isHyper = false;
         let lastTapTime = 0;
-        let tapCount = 0;
+        let combo = 0;
 
         render.canvas.addEventListener('touchstart', (e) => {
             const now = Date.now();
-            if (now - lastTapTime < 250) { // Tapping fast (within 250ms)
-                tapCount++;
-                if (tapCount >= 3) { // Trigger on 3rd fast tap
+            if (now - lastTapTime < 300) {
+                combo++;
+                if (combo >= 3) {
                     triggerCrazyFlip(e.touches[0].clientX, e.touches[0].clientY);
-                    tapCount = 0; // Reset
+                    combo = 0;
                 }
-            } else {
-                tapCount = 1;
-            }
+            } else { combo = 1; }
             lastTapTime = now;
         });
 
         function triggerCrazyFlip(x, y) {
-            // Physics Blast
-            const force = 0.15;
-            Body.applyForce(bouch, bouch.position, { 
-                x: (Math.random() - 0.5) * force, 
-                y: -force * 1.5 
-            });
-            Body.setAngularVelocity(bouch, (Math.random() - 0.5) * 0.5);
+            if (isHyper) return; // Can't add points during hyper mode
 
-            // UI Animation
-            const txt = document.createElement('div');
-            txt.className = 'crazy-text';
-            txt.innerText = 'CRAZY FLIP!';
-            txt.style.left = x + 'px';
-            txt.style.top = y + 'px';
-            document.body.appendChild(txt);
-            setTimeout(() => txt.remove(), 600);
+            frenzyPoints += 10;
+            updateFrenzyBar();
 
-            // Haptic
-            if (window.navigator.vibrate) window.navigator.vibrate([30, 10, 30]);
+            // Physics blast
+            Body.applyForce(bouch, bouch.position, { x: (Math.random()-0.5)*0.1, y: -0.15 });
+            
+            showText(x, y, "CRAZY FLIP!");
+
+            if (frenzyPoints >= 100) {
+                activateHyperMode();
+            }
         }
 
-        // Standard Logic
+        function updateFrenzyBar() {
+            document.getElementById('frenzy-bar').style.width = frenzyPoints + '%';
+        }
+
+        function activateHyperMode() {
+            isHyper = true;
+            document.getElementById('stats-container').classList.add('hyper-active');
+            
+            // Visual feedback
+            bouch.render.sprite.tint = "#f1c40f"; 
+            
+            // Continuous vibration
+            if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 100, 50, 100]);
+
+            setTimeout(() => {
+                isHyper = false;
+                frenzyPoints = 0;
+                updateFrenzyBar();
+                document.getElementById('stats-container').classList.remove('hyper-active');
+                bouch.render.sprite.tint = null;
+            }, 3000);
+        }
+
+        function showText(x, y, str) {
+            const txt = document.createElement('div');
+            txt.className = 'crazy-text';
+            txt.innerText = str;
+            txt.style.left = x + 'px'; txt.style.top = y + 'px';
+            document.body.appendChild(txt);
+            setTimeout(() => txt.remove(), 500);
+        }
+
+        // PHYSICS LOOP
         let totalRotation = 0;
         let lastAngle = bouch.angle;
+
         Events.on(engine, 'afterUpdate', () => {
+            if (isHyper) {
+                // Spinning like crazy
+                Body.setAngularVelocity(bouch, 0.6);
+                Body.setVelocity(bouch, { x: 0, y: -0.5 }); // Defy gravity slightly
+                showText(bouch.position.x, bouch.position.y, "OVERDRIVE!");
+            }
+
             if (!mouseConstraint.constraint.body) {
                 let delta = bouch.angle - lastAngle;
                 totalRotation += Math.abs(delta);
                 if (totalRotation >= Math.PI * 2) {
                     gameState.flips++; totalRotation = 0;
-                    if (window.navigator.vibrate) window.navigator.vibrate(20);
-                    localStorage.setItem('bouchSave', JSON.stringify(gameState));
                     document.getElementById('flipCount').innerText = gameState.flips;
+                    localStorage.setItem('bouchSave', JSON.stringify(gameState));
                 }
             }
             lastAngle = bouch.angle;
-            // Boundary Safety
+            
+            // Boundary Guard
             if (bouch.position.y > window.innerHeight + 100 || bouch.position.y < -100) {
                 Body.setPosition(bouch, { x: window.innerWidth/2, y: window.innerHeight/2 });
-                Body.setVelocity(bouch, {x:0, y:0});
             }
         });
 
@@ -175,9 +211,9 @@
             const list = document.getElementById('skin-list'); list.innerHTML = '';
             gameState.unlockedSkins.forEach(id => {
                 const card = document.createElement('div');
-                card.className = `skin-card ${gameState.currentSkin === id ? 'active' : ''}`;
+                card.className = `skin-card`;
                 card.innerText = prestigeTitles[id];
-                card.onclick = () => { gameState.currentSkin = id; bouch.render.opacity = 1 - (id * 0.05); renderInventory(); };
+                card.onclick = () => { gameState.currentSkin = id; bouch.render.opacity = 1 - (id * 0.05); };
                 list.appendChild(card);
             });
         }
