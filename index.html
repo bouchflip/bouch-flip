@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bouch Flip</title>
+    <style>
+        :root { --bg: #f0f9ff; --text: #2c3e50; --acc: #3498db; }
+        [data-theme="dark"] { --bg: #1a1a1a; --text: #ecf0f1; --acc: #e74c3c; }
+
+        body { margin: 0; overflow: hidden; background: var(--bg); font-family: 'Arial Black', sans-serif; transition: 0.3s; }
+
+        /* Top Left Stats */
+        #stats-container {
+            position: absolute; top: 20px; left: 20px;
+            z-index: 10; pointer-events: none;
+        }
+        .stat-label { font-size: 12px; color: var(--acc); text-transform: uppercase; letter-spacing: 2px; margin: 0; }
+        #flipCount { font-size: 50px; color: var(--text); line-height: 1; margin: 5px 0; }
+        #prestigeRank { font-size: 16px; color: #f1c40f; display: block; }
+
+        /* Top Right Controls */
+        #controls-container {
+            position: absolute; top: 20px; right: 20px;
+            display: flex; flex-direction: column; gap: 10px; z-index: 100;
+        }
+
+        .btn-ui {
+            padding: 12px 20px; border-radius: 25px; border: none;
+            cursor: pointer; font-weight: bold; font-size: 11px;
+            background: var(--text); color: var(--bg);
+            transition: all 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .btn-ui:hover { transform: scale(1.05); }
+        #reset-btn { background: #e74c3c; color: white; }
+
+        /* BOTTOM INVENTORY DRAWER */
+        #inventory {
+            position: absolute; bottom: -400px; left: 0; width: 100%; height: 350px;
+            background: rgba(0,0,0,0.95); color: white; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 90; padding: 20px; box-sizing: border-box;
+            border-top: 4px solid var(--acc);
+            border-radius: 30px 30px 0 0;
+            text-align: center;
+        }
+        #inventory.open { bottom: 0; }
+        #inventory h3 { margin: 10px 0 20px 0; text-transform: uppercase; font-size: 18px; color: var(--acc); }
+        
+        .skin-list { 
+            display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 15px; 
+            padding: 10px; padding-bottom: 20px;
+            scrollbar-width: thin;
+        }
+        .skin-card { 
+            min-width: 120px; padding: 20px 10px; border: 2px solid #333; 
+            cursor: pointer; text-align: center; border-radius: 15px; background: #111;
+            transition: 0.2s; flex-shrink: 0;
+        }
+        .skin-card.active { border-color: #f1c40f; background: rgba(241, 196, 15, 0.2); transform: scale(1.05); }
+
+        /* Prestige Button */
+        #prestige-btn { 
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); 
+            background: #f1c40f; color: #000; font-size: 20px; display: none; z-index: 50;
+            padding: 20px 40px; border-radius: 50px; border: 4px solid #000; cursor: pointer;
+        }
+
+        @keyframes upgradeFlash { 0% { filter: brightness(1); } 50% { filter: brightness(2); } 100% { filter: brightness(1); } }
+        .upgrading { animation: upgradeFlash 0.5s ease-out; }
+    </style>
+</head>
+<body>
+
+    <div id="controls-container">
+        <button id="theme-toggle" class="btn-ui">THEME</button>
+        <button id="inv-toggle" class="btn-ui">INVENTORY</button>
+        <button id="reset-btn" class="btn-ui">RESET (R)</button>
+    </div>
+
+    <div id="inventory">
+        <h3>Prestige Skins</h3>
+        <div id="skin-list" class="skin-list"></div>
+        <p style="font-size: 10px; color: #666; margin-top: 10px;">Scroll horizontally for more skins</p>
+    </div>
+
+    <div id="stats-container">
+        <p class="stat-label">Total Flips</p>
+        <div id="flipCount">0</div>
+        <span id="prestigeRank">Rank: Rookie</span>
+    </div>
+
+    <button id="prestige-btn">PRESTIGE BOUCH!</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+    <script>
+        const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Events, Body } = Matter;
+        const engine = Engine.create();
+        engine.positionIterations = 15;
+        engine.velocityIterations = 15;
+
+        const render = Render.create({
+            element: document.body, engine: engine,
+            options: { width: window.innerWidth, height: window.innerHeight, wireframes: false, background: 'transparent' }
+        });
+
+        let gameState = JSON.parse(localStorage.getItem('bouchSave')) || {
+            flips: 0, prestige: 0, unlockedSkins: [0], currentSkin: 0, theme: 'light'
+        };
+
+        const prestigeTitles = ["Rookie", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Ruby", "Diamond", "Master", "Grandmaster", "Bouch God"];
+        const filters = ["none", "hue-rotate(90deg)", "hue-rotate(180deg)", "contrast(200%)", "invert(100%)", "sepia(100%)", "brightness(1.5)", "saturate(5)", "grayscale(100%)", "drop-shadow(0 0 10px gold)"];
+
+        // WALLS
+        const wallThick = 1000; 
+        let walls = [];
+        function createWalls() {
+            if (walls.length > 0) Composite.remove(engine.world, walls);
+            const w = window.innerWidth; const h = window.innerHeight;
+            walls = [
+                Bodies.rectangle(w/2, h + wallThick/2, w + wallThick, wallThick, { isStatic: true, render: { visible: false } }),
+                Bodies.rectangle(w/2, -wallThick/2, w + wallThick, wallThick, { isStatic: true, render: { visible: false } }),
+                Bodies.rectangle(-wallThick/2, h/2, wallThick, h + wallThick, { isStatic: true, render: { visible: false } }),
+                Bodies.rectangle(w + wallThick/2, h/2, wallThick, h + wallThick, { isStatic: true, render: { visible: false } })
+            ];
+            Composite.add(engine.world, walls);
+        }
+
+        // BOUCH
+        const bouch = Bodies.rectangle(window.innerWidth/2, window.innerHeight/2, 110, 160, {
+            chamfer: { radius: 20 }, frictionAir: 0.006, restitution: 0.5, inertia: 7500,
+            render: { sprite: { texture: 'Bouch.png', xScale: 0.5, yScale: 0.5 } }
+        });
+
+        const mouseConstraint = MouseConstraint.create(engine, {
+            mouse: Mouse.create(render.canvas),
+            constraint: { stiffness: 0.2, render: { visible: false } }
+        });
+
+        Composite.add(engine.world, [bouch, mouseConstraint]);
+        createWalls();
+
+        // FUNCTIONS
+        function save() { localStorage.setItem('bouchSave', JSON.stringify(gameState)); updateUI(); }
+
+        function updateUI() {
+            document.getElementById('flipCount').innerText = gameState.flips;
+            document.getElementById('prestigeRank').innerText = `Rank: ${prestigeTitles[gameState.prestige]}`;
+            document.getElementById('prestige-btn').style.display = (gameState.flips >= 1000 && gameState.prestige < 10) ? 'block' : 'none';
+            render.canvas.style.filter = filters[Math.min(Math.floor(gameState.flips / 100), 9)];
+        }
+
+        function resetBouch() {
+            Body.setPosition(bouch, { x: window.innerWidth/2, y: window.innerHeight/2 });
+            Body.setVelocity(bouch, { x: 0, y: 0 });
+            Body.setAngularVelocity(bouch, 0);
+            Body.setAngle(bouch, 0);
+        }
+
+        let totalRotation = 0;
+        let lastAngle = bouch.angle;
+
+        Events.on(engine, 'afterUpdate', () => {
+            const pos = bouch.position;
+            const buffer = 100;
+            if (pos.x < -buffer || pos.x > window.innerWidth + buffer || pos.y < -buffer || pos.y > window.innerHeight + buffer) {
+                resetBouch();
+            }
+
+            if (!mouseConstraint.constraint.body) {
+                let delta = bouch.angle - lastAngle;
+                totalRotation += Math.abs(delta);
+                if (totalRotation >= Math.PI * 2) {
+                    gameState.flips++; totalRotation = 0;
+                    if (gameState.flips % 100 === 0) { 
+                        render.canvas.classList.add('upgrading'); 
+                        setTimeout(()=>render.canvas.classList.remove('upgrading'), 500); 
+                    }
+                    save();
+                }
+            }
+            lastAngle = bouch.angle;
+        });
+
+        // UI Handlers
+        document.getElementById('reset-btn').onclick = resetBouch;
+        document.getElementById('inv-toggle').onclick = () => document.getElementById('inventory').classList.toggle('open');
+        document.getElementById('theme-toggle').onclick = () => {
+            gameState.theme = (gameState.theme === 'light' ? 'dark' : 'light');
+            document.body.setAttribute('data-theme', gameState.theme); save();
+        };
+        document.getElementById('prestige-btn').onclick = () => {
+            gameState.prestige++; gameState.flips = 0;
+            if(!gameState.unlockedSkins.includes(gameState.prestige)) gameState.unlockedSkins.push(gameState.prestige);
+            save(); renderInventory(); resetBouch();
+        };
+
+        function renderInventory() {
+            const list = document.getElementById('skin-list'); list.innerHTML = '';
+            gameState.unlockedSkins.forEach(id => {
+                const card = document.createElement('div');
+                card.className = `skin-card ${gameState.currentSkin === id ? 'active' : ''}`;
+                card.innerText = prestigeTitles[id];
+                card.onclick = () => { gameState.currentSkin = id; bouch.render.opacity = 1 - (id * 0.05); save(); renderInventory(); };
+                list.appendChild(card);
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            render.canvas.width = window.innerWidth; render.canvas.height = window.innerHeight; createWalls();
+        });
+        window.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'r') resetBouch(); });
+
+        document.body.setAttribute('data-theme', gameState.theme);
+        updateUI(); renderInventory();
+        Render.run(render);
+        Runner.run(Runner.create(), engine);
+    </script>
+</body>
+</html>
