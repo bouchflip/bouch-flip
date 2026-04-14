@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Bouch Flip: Chaos Edition</title>
+    <title>Bouch Flip: Ultimate Chaos</title>
     <style>
         :root { --bg: #f0f9ff; --text: #2c3e50; --acc: #3498db; }
         [data-theme="dark"] { --bg: #1a1a1a; --text: #ecf0f1; --acc: #e74c3c; }
@@ -13,8 +13,10 @@
         /* Stats & UI */
         #stats-container { position: absolute; top: 40px; left: 20px; z-index: 10; pointer-events: none; }
         #flipCount { font-size: 40px; color: var(--text); line-height: 1; }
-        #frenzy-container { width: 180px; height: 16px; background: rgba(0,0,0,0.1); border-radius: 8px; margin-top: 10px; overflow: hidden; border: 2px solid rgba(0,0,0,0.1); }
-        #frenzy-bar { width: 0%; height: 100%; background: #3498db; transition: width 0.2s; }
+        
+        /* 3-STAGE FRENZY BAR */
+        #frenzy-container { width: 180px; height: 18px; background: rgba(0,0,0,0.1); border-radius: 9px; margin-top: 10px; overflow: hidden; border: 2px solid rgba(0,0,0,0.1); }
+        #frenzy-bar { width: 0%; height: 100%; background: #3498db; transition: width 0.1s; }
         .stage-2 #frenzy-bar { background: #f39c12; }
         .stage-3 #frenzy-bar { background: #e74c3c; animation: flash 0.3s infinite; }
         @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
@@ -22,6 +24,7 @@
         /* Buttons */
         #controls-container { position: absolute; top: 40px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
         .btn-ui { padding: 10px 15px; border-radius: 20px; border: none; cursor: pointer; font-weight: bold; font-size: 10px; background: var(--text); color: var(--bg); }
+        
         #prestige-btn { 
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); 
             background: #f1c40f; color: #000; font-size: 22px; display: none; z-index: 50;
@@ -75,7 +78,6 @@
         let gameState = JSON.parse(localStorage.getItem('bouchSave')) || DEFAULT_STATE;
         const baseTitles = ["Rookie", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Ruby", "Diamond", "Master", "Grandmaster", "Bouch God"];
         
-        // 11 Unique Particle Configs
         const configs = [
             { c: "141, 214, 65,", s: 5, f: 0.02 }, { c: "169, 113, 66,", s: 4, f: 0.04 }, { c: "220, 220, 220,", s: 3, f: 0.05 }, { c: "255, 215, 0,", s: 6, f: 0.02 },
             { c: "173, 216, 230,", s: 5, f: 0.02 }, { c: "0, 255, 127,", s: 8, f: 0.03 }, { c: "255, 0, 0,", s: 8, f: 0.03 }, { c: "0, 255, 255,", s: 5, f: 0.02 },
@@ -112,19 +114,28 @@
             document.getElementById('prestige-btn').style.display = (gameState.prestige < 10 && gameState.flips >= 100) ? 'block' : 'none';
         }
 
-        // FRENZY LOGIC
-        let fpts = 0, activeFrenzy = false, lTap = 0, pts = [];
+        // CHARGED FRENZY LOGIC
+        let fpts = 0, activeFrenzy = false, lTap = 0, pts = [], chargeTimer;
         
         render.canvas.addEventListener('touchstart', (e) => {
             if (activeFrenzy) return;
             const now = Date.now();
-            if (now - lTap < 450) { 
+            clearTimeout(chargeTimer);
+
+            if (now - lTap < 450 || fpts === 0) { 
                 fpts++; 
                 updateFrenzyBar();
-                if (fpts >= 25) triggerFrenzy(3);
-                else if (fpts === 15) triggerFrenzy(2);
-                else if (fpts === 5) triggerFrenzy(1);
-            } else fpts = 0;
+                if (fpts >= 25) {
+                    triggerFrenzy(3);
+                } else {
+                    chargeTimer = setTimeout(() => {
+                        if (fpts >= 15) triggerFrenzy(2);
+                        else if (fpts >= 5) triggerFrenzy(1);
+                        else fpts = 0;
+                        updateFrenzyBar();
+                    }, 500);
+                }
+            } else fpts = 1;
             lTap = now;
             updateFrenzyBar();
         });
@@ -132,13 +143,13 @@
         function updateFrenzyBar() {
             let bar = document.getElementById('frenzy-bar');
             let status = document.getElementById('frenzy-status');
-            bar.style.width = (fpts / 25 * 100) + "%";
+            bar.style.width = (Math.min(fpts, 25) / 25 * 100) + "%";
             document.getElementById('frenzy-container').className = fpts >= 25 ? "stage-3" : (fpts >= 15 ? "stage-2" : "");
             
-            if (fpts >= 25) status.innerText = "ULTIMATE BOUCH ARMY!!";
-            else if (fpts >= 15) status.innerText = "CRAZY FRENZY!";
-            else if (fpts >= 5) status.innerText = "STANDARD FRENZY";
-            else status.innerText = "TAP FAST!";
+            if (fpts >= 25) status.innerText = "RELEASE FOR ARMY!!";
+            else if (fpts >= 15) status.innerText = "CRAZY FRENZY CHARGED";
+            else if (fpts >= 5) status.innerText = "STANDARD FRENZY CHARGED";
+            else status.innerText = "TAP FAST TO CHARGE!";
         }
 
         function triggerFrenzy(lvl) {
@@ -152,13 +163,11 @@
             let frenzyInterval = setInterval(() => {
                 const centerX = window.innerWidth / 2;
                 const centerY = window.innerHeight / 2;
-                
-                // Magnet to center
-                Body.setVelocity(bouch, { x: (centerX - bouch.position.x) * 0.1, y: (centerY - bouch.position.y) * 0.1 });
+                Body.setVelocity(bouch, { x: (centerX - bouch.position.x) * 0.15, y: (centerY - bouch.position.y) * 0.15 });
                 Body.setAngularVelocity(bouch, spinPower);
 
                 army.forEach(b => {
-                    Body.setVelocity(b, { x: (centerX - b.position.x) * 0.05 + (Math.random()-0.5)*5, y: (centerY - b.position.y) * 0.05 + (Math.random()-0.5)*5 });
+                    Body.setVelocity(b, { x: (centerX - b.position.x) * 0.08 + (Math.random()-0.5)*5, y: (centerY - b.position.y) * 0.08 + (Math.random()-0.5)*5 });
                     Body.setAngularVelocity(b, spinPower * 1.5);
                 });
             }, 16);
@@ -173,7 +182,7 @@
 
         function spawnArmy() {
             for(let i=0; i<10; i++) {
-                let b = Bodies.rectangle(Math.random()*window.innerWidth, Math.random()*window.innerHeight, 80, 110, {
+                let b = Bodies.rectangle(window.innerWidth/2, window.innerHeight/2, 80, 110, {
                     frictionAir: 0, restitution: 1, collisionFilter: { group: -1 },
                     render: { sprite: { texture: 'Bouch.png', xScale: 0.3, yScale: 0.3 }, opacity: 0.6 }
                 });
@@ -196,7 +205,7 @@
 
             army.forEach(b => { if (Math.abs(b.angularVelocity) > 0.1) gameState.flips += 0.1; });
 
-            if (bouch.speed > 3) {
+            if (bouch.speed > 2.5) {
                 pts.push({ x: bouch.position.x, y: bouch.position.y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 1, config: configs[gameState.currentSkin] || configs[0] });
             }
             if (bouch.position.y > window.innerHeight + 100 || bouch.position.y < -100) Body.setPosition(bouch, { x: window.innerWidth/2, y: window.innerHeight/2 });
