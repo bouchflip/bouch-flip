@@ -4,44 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Bouch Flip: Chaos Army</title>
+    <title>Bouch Flip: Chaos Edition</title>
     <style>
         :root { --bg: #f0f9ff; --text: #2c3e50; --acc: #3498db; }
         [data-theme="dark"] { --bg: #1a1a1a; --text: #ecf0f1; --acc: #e74c3c; }
         body { margin: 0; overflow: hidden; background: var(--bg); font-family: 'Arial Black', sans-serif; transition: 0.3s; touch-action: none; -webkit-user-select: none; }
 
+        /* Stats & UI */
         #stats-container { position: absolute; top: 40px; left: 20px; z-index: 10; pointer-events: none; }
         #flipCount { font-size: 40px; color: var(--text); line-height: 1; }
-        
-        /* 3-STAGE FRENZY BAR */
-        #frenzy-container { width: 180px; height: 16px; background: rgba(0,0,0,0.1); border-radius: 8px; margin-top: 10px; overflow: hidden; border: 2px solid rgba(0,0,0,0.1); position: relative; }
-        #frenzy-bar { width: 0%; height: 100%; background: #3498db; transition: width 0.2s, background 0.3s; }
+        #frenzy-container { width: 180px; height: 16px; background: rgba(0,0,0,0.1); border-radius: 8px; margin-top: 10px; overflow: hidden; border: 2px solid rgba(0,0,0,0.1); }
+        #frenzy-bar { width: 0%; height: 100%; background: #3498db; transition: width 0.2s; }
         .stage-2 #frenzy-bar { background: #f39c12; }
         .stage-3 #frenzy-bar { background: #e74c3c; animation: flash 0.3s infinite; }
         @keyframes flash { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
+        /* Buttons */
         #controls-container { position: absolute; top: 40px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 100; }
         .btn-ui { padding: 10px 15px; border-radius: 20px; border: none; cursor: pointer; font-weight: bold; font-size: 10px; background: var(--text); color: var(--bg); }
-        
         #prestige-btn { 
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); 
             background: #f1c40f; color: #000; font-size: 22px; display: none; z-index: 50;
             padding: 20px 40px; border-radius: 50px; border: 4px solid #000; box-shadow: 0 0 20px gold;
         }
 
+        /* Overlays */
         #evil-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #660000; color: white; display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
         .shake { animation: shake 0.2s infinite; }
         @keyframes shake { 0% { transform: translate(2px, 2px); } 50% { transform: translate(-2px, -2px); } 100% { transform: translate(2px, -2px); } }
 
+        /* Inventory */
         #inventory { position: absolute; bottom: -350px; left: 0; width: 100%; height: 320px; background: rgba(0,0,0,0.95); color: white; transition: 0.4s; z-index: 110; padding: 20px; box-sizing: border-box; border-top: 4px solid var(--acc); border-radius: 30px 30px 0 0; }
         #inventory.open { bottom: 0; }
         .skin-list { display: flex; overflow-x: auto; gap: 15px; padding: 10px 0; }
-        .skin-card { min-width: 100px; padding: 15px; border: 2px solid #333; border-radius: 15px; background: #111; flex-shrink: 0; text-align: center; }
+        .skin-card { min-width: 100px; padding: 15px; border: 2px solid #333; border-radius: 15px; background: #111; flex-shrink: 0; text-align: center; font-size: 12px; }
     </style>
 </head>
 <body>
 
     <div id="evil-overlay" class="shake"><h1>YOU THOUGHT YOU COULD CHEAT?</h1></div>
+    
     <div id="controls-container">
         <button id="theme-toggle" class="btn-ui">THEME</button>
         <button id="inv-toggle" class="btn-ui">PARTICLES</button>
@@ -72,19 +74,29 @@
         const DEFAULT_STATE = { flips: 0, prestige: 0, unlockedSkins: [0], currentSkin: 0, theme: 'light' };
         let gameState = JSON.parse(localStorage.getItem('bouchSave')) || DEFAULT_STATE;
         const baseTitles = ["Rookie", "Bronze", "Silver", "Gold", "Platinum", "Emerald", "Ruby", "Diamond", "Master", "Grandmaster", "Bouch God"];
+        
+        // 11 Unique Particle Configs
         const configs = [
             { c: "141, 214, 65,", s: 5, f: 0.02 }, { c: "169, 113, 66,", s: 4, f: 0.04 }, { c: "220, 220, 220,", s: 3, f: 0.05 }, { c: "255, 215, 0,", s: 6, f: 0.02 },
-            { c: "173, 216, 230,", s: 5, f: 0.02 }, { c: "0, 255, 127,", s: 8, f: 0.03 }, { c: "255, 0, 0,", s: 8, f: 0.03 }, { c: "0, 255, 255,", s: 5, f: 0.02, shape: 'star' },
+            { c: "173, 216, 230,", s: 5, f: 0.02 }, { c: "0, 255, 127,", s: 8, f: 0.03 }, { c: "255, 0, 0,", s: 8, f: 0.03 }, { c: "0, 255, 255,", s: 5, f: 0.02 },
             { c: "147, 112, 219,", s: 10, f: 0.015 }, { c: "255, 140, 0,", s: 12, f: 0.012 }, { c: "0, 0, 0,", s: 15, f: 0.01, glow: "#ff0000" }
         ];
 
-        const bouch = Bodies.rectangle(window.innerWidth/2, window.innerHeight/2, 100, 140, { chamfer: { radius: 20 }, frictionAir: 0.006, restitution: 0.5, render: { sprite: { texture: 'Bouch.png', xScale: 0.45, yScale: 0.45 } } });
+        const bouch = Bodies.rectangle(window.innerWidth/2, window.innerHeight/2, 100, 140, { 
+            chamfer: { radius: 20 }, frictionAir: 0.006, restitution: 0.5, 
+            render: { sprite: { texture: 'Bouch.png', xScale: 0.45, yScale: 0.45 } } 
+        });
         let army = [];
 
         function createWalls() {
             const w = window.innerWidth, h = window.innerHeight;
             const wallThick = 1000;
-            return [ Bodies.rectangle(w/2, h + wallThick/2, w, wallThick, { isStatic: true, render: { visible: false } }), Bodies.rectangle(w/2, -wallThick/2, w, wallThick, { isStatic: true, render: { visible: false } }), Bodies.rectangle(-wallThick/2, h/2, wallThick, h, { isStatic: true, render: { visible: false } }), Bodies.rectangle(w + wallThick/2, h/2, wallThick, h, { isStatic: true, render: { visible: false } }) ];
+            return [ 
+                Bodies.rectangle(w/2, h + wallThick/2, w, wallThick, { isStatic: true, render: { visible: false } }), 
+                Bodies.rectangle(w/2, -wallThick/2, w, wallThick, { isStatic: true, render: { visible: false } }), 
+                Bodies.rectangle(-wallThick/2, h/2, wallThick, h, { isStatic: true, render: { visible: false } }), 
+                Bodies.rectangle(w + wallThick/2, h/2, wallThick, h, { isStatic: true, render: { visible: false } }) 
+            ];
         }
         Composite.add(engine.world, [bouch, ...createWalls()]);
 
@@ -92,24 +104,26 @@
         Composite.add(engine.world, mc);
 
         function updateUI() {
-            document.getElementById('flipCount').innerText = gameState.flips.toLocaleString();
+            document.getElementById('flipCount').innerText = Math.floor(gameState.flips).toLocaleString();
             let p = gameState.prestige;
-            document.getElementById('prestigeRank').innerText = "Rank: " + (p < 11 ? baseTitles[p] : "Eternal");
+            let rankText = p < 11 ? baseTitles[p] : "Bouch God";
+            if(gameState.flips >= 1000000) rankText = "ETERNAL BOUCH";
+            document.getElementById('prestigeRank').innerText = "Rank: " + rankText;
             document.getElementById('prestige-btn').style.display = (gameState.prestige < 10 && gameState.flips >= 100) ? 'block' : 'none';
         }
 
         // FRENZY LOGIC
-        let fpts = 0, fLevel = 1, activeFrenzy = false, lTap = 0, combo = 0, pts = [];
+        let fpts = 0, activeFrenzy = false, lTap = 0, pts = [];
         
         render.canvas.addEventListener('touchstart', (e) => {
             if (activeFrenzy) return;
             const now = Date.now();
-            if (now - lTap < 400) { 
+            if (now - lTap < 450) { 
                 fpts++; 
                 updateFrenzyBar();
-                if (fpts >= 30) triggerFrenzy(3);
-                else if (fpts === 20) triggerFrenzy(2);
-                else if (fpts === 10) triggerFrenzy(1);
+                if (fpts >= 25) triggerFrenzy(3);
+                else if (fpts === 15) triggerFrenzy(2);
+                else if (fpts === 5) triggerFrenzy(1);
             } else fpts = 0;
             lTap = now;
             updateFrenzyBar();
@@ -118,36 +132,42 @@
         function updateFrenzyBar() {
             let bar = document.getElementById('frenzy-bar');
             let status = document.getElementById('frenzy-status');
-            bar.style.width = (fpts / 30 * 100) + "%";
+            bar.style.width = (fpts / 25 * 100) + "%";
+            document.getElementById('frenzy-container').className = fpts >= 25 ? "stage-3" : (fpts >= 15 ? "stage-2" : "");
             
-            document.getElementById('frenzy-container').className = fpts >= 30 ? "stage-3" : (fpts >= 20 ? "stage-2" : "");
-            
-            if (fpts >= 30) status.innerText = "ULTIMATE BOUCH ARMY!!";
-            else if (fpts >= 20) status.innerText = "CRAZY FRENZY!";
-            else if (fpts >= 10) status.innerText = "STANDARD FRENZY";
+            if (fpts >= 25) status.innerText = "ULTIMATE BOUCH ARMY!!";
+            else if (fpts >= 15) status.innerText = "CRAZY FRENZY!";
+            else if (fpts >= 5) status.innerText = "STANDARD FRENZY";
             else status.innerText = "TAP FAST!";
         }
 
         function triggerFrenzy(lvl) {
             activeFrenzy = true;
             if (window.navigator.vibrate) window.navigator.vibrate(lvl * 100);
-            
             if (lvl === 3) spawnArmy();
 
             let duration = 3000;
-            let spinPower = lvl === 1 ? 0.3 : (lvl === 2 ? 0.5 : 0.8);
+            let spinPower = lvl === 1 ? 0.35 : (lvl === 2 ? 0.55 : 0.85);
 
             let frenzyInterval = setInterval(() => {
+                const centerX = window.innerWidth / 2;
+                const centerY = window.innerHeight / 2;
+                
+                // Magnet to center
+                Body.setVelocity(bouch, { x: (centerX - bouch.position.x) * 0.1, y: (centerY - bouch.position.y) * 0.1 });
                 Body.setAngularVelocity(bouch, spinPower);
-                army.forEach(b => Body.setAngularVelocity(b, spinPower * 1.5));
+
+                army.forEach(b => {
+                    Body.setVelocity(b, { x: (centerX - b.position.x) * 0.05 + (Math.random()-0.5)*5, y: (centerY - b.position.y) * 0.05 + (Math.random()-0.5)*5 });
+                    Body.setAngularVelocity(b, spinPower * 1.5);
+                });
             }, 16);
 
             setTimeout(() => {
                 clearInterval(frenzyInterval);
-                activeFrenzy = false;
-                fpts = 0;
-                updateFrenzyBar();
-                clearArmy();
+                activeFrenzy = false; fpts = 0;
+                updateFrenzyBar(); clearArmy();
+                Body.applyForce(bouch, bouch.position, { x: 0, y: -0.05 });
             }, duration);
         }
 
@@ -157,7 +177,6 @@
                     frictionAir: 0, restitution: 1, collisionFilter: { group: -1 },
                     render: { sprite: { texture: 'Bouch.png', xScale: 0.3, yScale: 0.3 }, opacity: 0.6 }
                 });
-                Body.setVelocity(b, { x: (Math.random()-0.5)*20, y: (Math.random()-0.5)*20 });
                 army.push(b);
                 Composite.add(engine.world, b);
             }
@@ -171,21 +190,14 @@
         // CORE LOOP
         let rot = 0, lAng = bouch.angle;
         Events.on(engine, 'afterUpdate', () => {
-            // Main Bouch Rotation
             let delta = bouch.angle - lAng; rot += Math.abs(delta);
             if (rot >= Math.PI * 2) { gameState.flips++; rot = 0; updateUI(); save(); }
             lAng = bouch.angle;
 
-            // Army Rotation
-            army.forEach(b => {
-                // Ghost bouches count for flips too!
-                if (Math.abs(b.angularVelocity) > 0.1) {
-                    gameState.flips += 0.1; // Army adds flips rapidly
-                }
-            });
+            army.forEach(b => { if (Math.abs(b.angularVelocity) > 0.1) gameState.flips += 0.1; });
 
             if (bouch.speed > 3) {
-                pts.push({ x: bouch.position.x, y: bouch.position.y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 1, config: configs[gameState.currentSkin] });
+                pts.push({ x: bouch.position.x, y: bouch.position.y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 1, config: configs[gameState.currentSkin] || configs[0] });
             }
             if (bouch.position.y > window.innerHeight + 100 || bouch.position.y < -100) Body.setPosition(bouch, { x: window.innerWidth/2, y: window.innerHeight/2 });
         });
@@ -204,7 +216,7 @@
             }
         });
 
-        // UI Handlers
+        // UI & Cheats
         document.getElementById('prestige-btn').onclick = () => {
             gameState.prestige++; gameState.flips = 0;
             if(!gameState.unlockedSkins.includes(gameState.prestige)) gameState.unlockedSkins.push(gameState.prestige);
@@ -219,7 +231,7 @@
         function save() { localStorage.setItem('bouchSave', JSON.stringify(gameState)); }
         document.getElementById('inv-toggle').onclick = () => document.getElementById('inventory').classList.toggle('open');
         document.getElementById('theme-toggle').onclick = () => { gameState.theme = (gameState.theme === 'light' ? 'dark' : 'light'); document.body.setAttribute('data-theme', gameState.theme); save(); };
-        document.getElementById('reset-btn').onclick = () => Body.setPosition(bouch, { x: window.innerWidth/2, y: window.innerHeight/2 });
+        document.getElementById('reset-btn').onclick = () => { Body.setPosition(bouch, { x: window.innerWidth/2, y: window.innerHeight/2 }); Body.setVelocity(bouch, {x:0, y:0}); };
 
         function renderInventory() {
             const list = document.getElementById('skin-list'); list.innerHTML = '';
